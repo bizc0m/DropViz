@@ -1,0 +1,60 @@
+# Copie ce fichier en config.yaml et adapte-le.
+# Chaque "source" tourne à son propre intervalle, indépendamment des autres.
+
+global:
+  # backend d'extraction par défaut, surchargeable par source : spacy | llm
+  extractor: spacy
+
+  spacy:
+    model: fr_core_news_md   # `python -m spacy download fr_core_news_md`
+                              # utilise en_core_web_sm pour du contenu anglophone
+
+  llm:
+    provider: anthropic
+    model: claude-sonnet-5
+    api_key_env: ANTHROPIC_API_KEY   # nom de la variable d'environnement à lire
+
+  # graphe unique partagé par toutes les sources (recommandé pour croiser les sujets),
+  # ou "per_source" pour un graphe isolé par source
+  graph_mode: shared   # shared | per_source
+
+  data_dir: ./data
+  notebooks_dir: ./notebooks
+  timezone: Europe/Paris
+
+  # seuil en-dessous duquel un nœud est marqué "faible confiance" dans le rapport
+  min_corroborating_sources: 2
+
+sources:
+  # reliability : Admiralty Code A (totalement fiable) .. F (ne peut être jugée).
+  # Jugement humain sur LA SOURCE, à trancher toi-même -- pas de valeur "haute" par
+  # défaut (défaut = F si omis). Sert à calculer une crédibilité suggérée par
+  # entité/relation (voir graphwatch/graph/analysis.py::compute_credibility).
+  - name: veille-rss-exemple
+    type: rss
+    url: https://example.com/feed.xml
+    interval_minutes: 360          # toutes les 6h
+    extractor: spacy
+    reliability: C                 # ex: média généraliste, doutes significatifs possibles
+
+  - name: corpus-local-exemple
+    type: corpus_folder
+    path: ./corpus_sample
+    interval_minutes: 1440         # 1x/jour, ne retraite que les fichiers nouveaux/modifiés
+    extractor: llm
+    reliability: B                 # ex: corpus constitué à la main, sources vérifiées
+
+  - name: sujet-suivi-exemple
+    type: topic
+    query: "mot-clé ou thème à suivre"
+    # nécessite un fetcher branché (voir graphwatch/sources/topic_search.py) :
+    # par défaut ce type ne fait rien tant qu'aucune source de recherche n'est configurée
+    interval_minutes: 720
+    extractor: spacy
+    reliability: F                 # inconnue tant que le fetcher n'est pas choisi
+
+  - name: propagation-exemple
+    type: post_thread            # analyse de propagation (seed/bursts/top propagateurs)
+    path: ./posts_sample         # dossier de fichiers .json/.jsonl (voir graphwatch/propagation/models.py)
+    interval_minutes: 1440
+    # 'extractor' et 'reliability' ne s'appliquent pas à ce type (pas de NER, pas de score de confiance)
