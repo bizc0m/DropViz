@@ -80,6 +80,11 @@ python run.py webui               # http://127.0.0.1:8765
 ./launch.sh 9090                  # pour choisir le port toi-même
 ```
 
+Si le port demandé (8765 par défaut) est déjà pris par autre chose sur ta
+machine, `run.py webui` bascule **automatiquement** sur le premier port libre
+juste après et l'affiche clairement (`launch.sh`/`.command`/`.bat` lisent
+cette info et ouvrent le bon onglet tout seuls, pas besoin de le chercher toi-même).
+
 Une page locale pour ajouter du contenu à la main à une source `corpus_folder` :
 glisse des fichiers, ou colle une URL — ça écrit dans le dossier de la source
 et relance immédiatement un cycle, avec des liens directs vers le notebook et

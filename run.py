@@ -45,6 +45,32 @@ from graphwatch.report.index_view import generate_index
 from graphwatch.scheduler import build_scheduler
 
 
+def _port_is_free(host: str, port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.2)
+        try:
+            s.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def _pick_port(host: str, requested: int) -> int:
+    """Si le port demandé est déjà pris par autre chose sur la machine,
+    bascule automatiquement sur le premier libre juste après -- au lieu de
+    planter avec 'Address already in use', ce qui est de loin l'erreur la
+    plus fréquente en pratique (un autre outil tourne déjà dessus)."""
+    if _port_is_free(host, requested):
+        return requested
+    print(f"port {requested} déjà occupé (par un autre programme) -- recherche d'un port libre...")
+    for candidate in range(requested + 1, requested + 51):
+        if _port_is_free(host, candidate):
+            return candidate
+    raise RuntimeError(f"aucun port libre trouvé entre {requested} et {requested + 50}")
+
+
 def cmd_webui(args) -> int:
     import uvicorn
 
@@ -52,8 +78,9 @@ def cmd_webui(args) -> int:
 
     load_config(args.config)  # échoue tôt et clairement si la config est invalide
     app = create_app(args.config)
-    print(f"graph-watch webui -> http://{args.host}:{args.port}  (Ctrl+C pour arrêter)")
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    port = _pick_port(args.host, args.port)
+    print(f"graph-watch webui -> http://{args.host}:{port}  (Ctrl+C pour arrêter)")
+    uvicorn.run(app, host=args.host, port=port, log_level="warning")
     return 0
 
 
