@@ -59,10 +59,25 @@ python run.py once --source corpus-local-exemple --force   # régénère même s
 python run.py serve
 ```
 
-## Interface glisser-déposer + URL
+## App desktop (fenêtre native, aucun port à gérer)
+
+```bash
+pip install -r requirements-desktop.txt   # une fois -- voir ce fichier pour Linux
+python desktop_app.py
+```
+
+Une seule fenêtre s'ouvre, comme une vraie app. Le port est choisi
+automatiquement par l'OS (libre à chaque lancement) -- plus de "quel port",
+plus d'onglet de navigateur à retrouver, plus de terminal à surveiller.
+Fermer la fenêtre arrête tout. C'est la même interface que la version
+navigateur ci-dessous, juste sans navigateur.
+
+## Interface glisser-déposer + URL (navigateur)
 
 ```bash
 python run.py webui               # http://127.0.0.1:8765
+./launch.sh                       # ou launch.command (Mac) / launch.bat (Windows), double-clic
+./launch.sh 9090                  # pour choisir le port toi-même
 ```
 
 Une page locale pour ajouter du contenu à la main à une source `corpus_folder` :

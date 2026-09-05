@@ -1,0 +1,9 @@
+# Optionnel -- seulement pour l'app desktop (desktop_app.py), pas pour le
+# CLI/webui navigateur qui n'en a pas besoin.
+#
+# Windows/macOS : ça suffit, pywebview utilise l'API native du système.
+# Linux : il faut en plus un backend GTK ou Qt déjà installé sur la machine --
+#   soit gir1.2-webkit2-4.1 (paquet système, pas pip : ex. `sudo apt install
+#   python3-gi gir1.2-webkit2-4.1` sur Debian/Ubuntu),
+#   soit `pip install pyqt6 pyqt6-webengine` (plus lourd, mais 100% pip).
+pywebview>=6.0
