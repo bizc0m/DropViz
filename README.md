@@ -75,15 +75,18 @@ navigateur ci-dessous, juste sans navigateur.
 ## Interface glisser-déposer + URL (navigateur)
 
 ```bash
-python run.py webui               # http://127.0.0.1:8765
+python run.py webui               # port choisi automatiquement, affiché dans le terminal
 ./launch.sh                       # ou launch.command (Mac) / launch.bat (Windows), double-clic
-./launch.sh 9090                  # pour choisir le port toi-même
+./launch.sh 9090                  # pour FORCER un port précis, si tu en veux un fixe
+python run.py webui --port 9090   # équivalent en ligne de commande directe
 ```
 
-Si le port demandé (8765 par défaut) est déjà pris par autre chose sur ta
-machine, `run.py webui` bascule **automatiquement** sur le premier port libre
-juste après et l'affiche clairement (`launch.sh`/`.command`/`.bat` lisent
-cette info et ouvrent le bon onglet tout seuls, pas besoin de le chercher toi-même).
+Par défaut, **aucun port fixe n'est demandé** : l'OS en choisit un libre à
+chaque lancement (affiché dans le terminal / ouvert automatiquement par
+`launch.sh`) -- ça évite tout conflit avec un autre outil qui tournerait déjà
+sur un port "habituel" (8080, 8765...). Si tu forces un port précis avec
+`--port` et qu'il est déjà pris, `run.py` bascule automatiquement sur le
+premier libre juste après et l'affiche clairement.
 
 Une page locale pour ajouter du contenu à la main à une source `corpus_folder` :
 glisse des fichiers, ou colle une URL — ça écrit dans le dossier de la source

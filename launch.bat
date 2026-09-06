@@ -1,8 +1,9 @@
 @echo off
-REM Lanceur unique : double-clic (port 8765 par defaut), ou `launch.bat 9090`
-REM pour en proposer un. Si le port demande est deja pris par autre chose,
-REM run.py bascule tout seul sur un libre -- ce script lit le port REEL dans
-REM la sortie du serveur au lieu de deviner (scripts\extract_port.py).
+REM Lanceur unique : double-clic (port choisi automatiquement par l'OS), ou
+REM `launch.bat 9090` pour FORCER un port precis. Si le port force est deja
+REM pris par autre chose, run.py bascule tout seul sur un libre -- ce script
+REM lit le port REEL dans la sortie du serveur au lieu de deviner
+REM (scripts\extract_port.py).
 REM
 REM NOTE : ce script n'a pas pu etre teste sur une vraie machine Windows
 REM (aucune disponible ici pour verifier) -- dis-moi si quelque chose ne
@@ -12,7 +13,6 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 set REQUESTED_PORT=%1
-if "%REQUESTED_PORT%"=="" set REQUESTED_PORT=8765
 
 if not exist ".venv" (
   echo Premier lancement : installation ^(une minute ou deux^)...
@@ -29,10 +29,15 @@ if not exist "config.yaml" (
   echo config.yaml cree a partir de l'exemple -- edite-le pour tes sources avant de continuer.
 )
 
-echo Demarrage de graph-watch (port souhaite : %REQUESTED_PORT%)...
 set LOG_FILE=%TEMP%\graph-watch-launch.log
 del "%LOG_FILE%" >nul 2>&1
-start /b "" python -u run.py webui --port %REQUESTED_PORT% > "%LOG_FILE%" 2>&1
+if "%REQUESTED_PORT%"=="" (
+  echo Demarrage de graph-watch ^(port choisi automatiquement^)...
+  start /b "" python -u run.py webui > "%LOG_FILE%" 2>&1
+) else (
+  echo Demarrage de graph-watch ^(port souhaite : %REQUESTED_PORT%^)...
+  start /b "" python -u run.py webui --port %REQUESTED_PORT% > "%LOG_FILE%" 2>&1
+)
 
 set PORT=
 for /l %%i in (1,1,60) do (
@@ -48,7 +53,7 @@ if not defined PORT (
   goto :eof
 )
 
-if not "%PORT%"=="%REQUESTED_PORT%" (
+if not "%REQUESTED_PORT%"=="" if not "%PORT%"=="%REQUESTED_PORT%" (
   echo Port %REQUESTED_PORT% indisponible -- graph-watch tourne sur %PORT% a la place.
 )
 

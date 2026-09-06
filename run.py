@@ -3,8 +3,10 @@
 
   python run.py serve                          -> scheduler persistant (tourne en continu)
   python run.py once [--source NAME] [--force]  -> un seul cycle puis quitte
-  python run.py webui [--host 127.0.0.1] [--port 8765]
-      -> interface glisser-déposer + URL, tourne avec TA connexion réseau
+  python run.py webui [--host 127.0.0.1] [--port XXXX]
+      -> interface glisser-déposer + URL, tourne avec TA connexion réseau.
+         Sans --port : un port libre est choisi automatiquement par l'OS
+         (affiché dans le terminal) -- jamais de conflit avec un autre outil.
 
   python run.py propose --type rss --url URL --name NAME
   python run.py propose --type corpus_folder --path PATH --name NAME
@@ -57,11 +59,24 @@ def _port_is_free(host: str, port: int) -> bool:
             return False
 
 
-def _pick_port(host: str, requested: int) -> int:
-    """Si le port demandé est déjà pris par autre chose sur la machine,
-    bascule automatiquement sur le premier libre juste après -- au lieu de
-    planter avec 'Address already in use', ce qui est de loin l'erreur la
-    plus fréquente en pratique (un autre outil tourne déjà dessus)."""
+def _free_port(host: str) -> int:
+    """Demande à l'OS un port libre -- garanti disponible, sans jamais risquer
+    de tomber sur un port déjà pris par un autre outil sur la machine."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((host, 0))
+        return s.getsockname()[1]
+
+
+def _pick_port(host: str, requested: int | None) -> int:
+    """Sans --port explicite : l'OS choisit un port libre, garanti dispo --
+    plus de conflit possible avec un autre outil qui tournerait déjà sur un
+    port par défaut fixe (c'est précisément ce qui posait problème avant).
+    Avec --port explicite : on essaie ce port précis, et si jamais il est
+    pris, on bascule sur le premier libre juste après plutôt que de planter."""
+    if requested is None:
+        return _free_port(host)
     if _port_is_free(host, requested):
         return requested
     print(f"port {requested} déjà occupé (par un autre programme) -- recherche d'un port libre...")
@@ -243,7 +258,8 @@ def main() -> int:
 
     p_webui = sub.add_parser("webui", help="interface glisser-déposer + URL (tourne avec ta connexion réseau)")
     p_webui.add_argument("--host", default="127.0.0.1")
-    p_webui.add_argument("--port", type=int, default=8765)
+    p_webui.add_argument("--port", type=int, default=None,
+                          help="port fixe à utiliser -- omis par défaut : l'OS en choisit un libre automatiquement")
     p_webui.set_defaults(func=cmd_webui)
 
     p_entity = sub.add_parser("entity", help="fiche autonome pour une entité précise (à la demande)")

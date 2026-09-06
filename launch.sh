@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Lanceur unique : double-clic (ou `./launch.sh`, ou `./launch.sh 9090` pour
-# proposer un port) -- installe si besoin, démarre le serveur, ouvre le
-# navigateur tout seul sur le port RÉELLEMENT utilisé (si celui demandé est
-# déjà pris par autre chose, run.py bascule automatiquement sur un libre --
-# ce script lit cette décision au lieu de la deviner).
+# FORCER un port précis) -- installe si besoin, démarre le serveur, ouvre le
+# navigateur tout seul sur le port RÉELLEMENT utilisé. Sans argument, aucun
+# port par défaut fixe n'est demandé : l'OS en choisit un libre lui-même à
+# chaque lancement, garanti disponible -- plus jamais de conflit avec un
+# autre outil qui tournerait déjà sur un port "habituel" (8080, 8765...).
 set -e
 cd "$(dirname "$0")"
 
-REQUESTED_PORT="${1:-8765}"
+REQUESTED_PORT="${1:-}"
 
 if [ ! -d ".venv" ]; then
   echo "Premier lancement : installation (une minute ou deux)..."
@@ -26,9 +27,14 @@ if [ ! -f "config.yaml" ]; then
   echo "config.yaml créé à partir de l'exemple -- édite-le pour tes sources avant de continuer."
 fi
 
-echo "Démarrage de graph-watch (port souhaité : $REQUESTED_PORT)..."
 LOG_FILE="$(mktemp)"
-python -u run.py webui --port "$REQUESTED_PORT" > "$LOG_FILE" 2>&1 &
+if [ -n "$REQUESTED_PORT" ]; then
+  echo "Démarrage de graph-watch (port souhaité : $REQUESTED_PORT)..."
+  python -u run.py webui --port "$REQUESTED_PORT" > "$LOG_FILE" 2>&1 &
+else
+  echo "Démarrage de graph-watch (port choisi automatiquement)..."
+  python -u run.py webui > "$LOG_FILE" 2>&1 &
+fi
 SERVER_PID=$!
 
 # lit le port RÉEL depuis la sortie du serveur (peut différer de celui
@@ -51,12 +57,12 @@ done
 rm -f "$LOG_FILE"
 
 if [ -z "$PORT" ]; then
-  echo "Le serveur n'a pas répondu à temps -- relance avec 'python run.py -v webui --port $REQUESTED_PORT' pour voir le détail."
+  echo "Le serveur n'a pas répondu à temps -- relance avec 'python run.py -v webui' pour voir le détail."
   exit 1
 fi
 
 URL="http://127.0.0.1:$PORT"
-if [ "$PORT" != "$REQUESTED_PORT" ]; then
+if [ -n "$REQUESTED_PORT" ] && [ "$PORT" != "$REQUESTED_PORT" ]; then
   echo "Port $REQUESTED_PORT indisponible -- graph-watch tourne sur $PORT à la place."
 fi
 
