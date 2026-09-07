@@ -8,6 +8,16 @@
 set -e
 cd "$(dirname "$0")"
 
+# se met à jour tout seul si c'est un checkout git -- comme ça une seule
+# commande ("./launch.sh") suffit à chaque fois, y compris pour récupérer
+# les futurs correctifs. N'échoue jamais le lancement si le pull rate
+# (pas de réseau, modifs locales non commitées...) -- juste un avertissement.
+if [ -d ".git" ]; then
+  if ! git pull --ff-only --quiet 2>/tmp/graph-watch-pull-err.log; then
+    echo "MAJ auto impossible (voir /tmp/graph-watch-pull-err.log) -- on continue avec la version actuelle."
+  fi
+fi
+
 REQUESTED_PORT="${1:-}"
 
 if [ ! -d ".venv" ]; then
