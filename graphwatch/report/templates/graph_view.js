@@ -63,10 +63,27 @@
   var SPRING_K = 0.02;
   var DAMPING = 0.86;
   var CENTER_K = 0.006;
+  var MAX_FORCE = 40;       // plafond par composante -- sans ça, deux nœuds quasi
+                            // superposés (doublons d'entités mal fusionnés, ou
+                            // simplement le hasard du placement initial) génèrent
+                            // une répulsion explosive (REPULSION/d² avec d→0) qui
+                            // fait "sauter" le graphe au lieu de le stabiliser.
+  var MAX_TICKS = 500;      // filet de sécurité : même si l'énergie ne descend
+                            // jamais sous le seuil (cas pathologique), la
+                            // simulation s'arrête après ~quelques secondes plutôt
+                            // que de tourner/trembler indéfiniment.
   var settled = false;
+  var tickCount = 0;
+
+  function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
   function tick() {
     if (settled) return;
+    // cooling schedule : les forces s'atténuent progressivement avec le temps,
+    // comme un recuit simulé -- garantit la convergence même sur un graphe
+    // dense (beaucoup de nœuds autour d'un même hub), ce que le seul
+    // amortissement de vitesse (DAMPING) ne garantissait pas.
+    var cooling = Math.max(0.15, 1 - tickCount / MAX_TICKS);
     var n = nodes.length;
     for (var i = 0; i < n; i++) {
       var a = nodes[i];
@@ -76,13 +93,16 @@
         if (i === j) continue;
         var b = nodes[j];
         var dx = a.x - b.x, dy = a.y - b.y;
-        var d2 = dx * dx + dy * dy + 0.01;
+        var d2 = dx * dx + dy * dy + 4;  // plancher relevé (0.01 -> 4) : évite la
+                                          // singularité de répulsion quand deux
+                                          // nœuds démarrent quasi au même endroit
         var f = REPULSION / d2;
         var d = Math.sqrt(d2);
         fx += (dx / d) * f;
         fy += (dy / d) * f;
       }
-      a.ax = fx; a.ay = fy;
+      a.ax = clamp(fx, -MAX_FORCE, MAX_FORCE) * cooling;
+      a.ay = clamp(fy, -MAX_FORCE, MAX_FORCE) * cooling;
     }
     edges.forEach(function (e) {
       var dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
@@ -90,19 +110,20 @@
       var rest = 70 - Math.min(e.weight, wMax) * (30 / wMax);
       var f = SPRING_K * (d - rest);
       var fx = (dx / d) * f, fy = (dy / d) * f;
-      if (e.s.fx == null) { e.s.ax += fx; e.s.ay += fy; }
-      if (e.t.fx == null) { e.t.ax -= fx; e.t.ay -= fy; }
+      if (e.s.fx == null) { e.s.ax += fx * cooling; e.s.ay += fy * cooling; }
+      if (e.t.fx == null) { e.t.ax -= fx * cooling; e.t.ay -= fy * cooling; }
     });
     var energy = 0;
     nodes.forEach(function (a) {
       if (a.fx != null) { a.x = a.fx; a.y = a.fy; a.vx = 0; a.vy = 0; return; }
-      a.vx = (a.vx + a.ax * 0.9) * DAMPING;
-      a.vy = (a.vy + a.ay * 0.9) * DAMPING;
+      a.vx = clamp((a.vx + a.ax * 0.9) * DAMPING, -25, 25);
+      a.vy = clamp((a.vy + a.ay * 0.9) * DAMPING, -25, 25);
       a.x += a.vx;
       a.y += a.vy;
       energy += a.vx * a.vx + a.vy * a.vy;
     });
-    if (energy / n < 0.002) settled = true;
+    tickCount++;
+    if (energy / n < 0.002 || tickCount >= MAX_TICKS) settled = true;
   }
 
   // ---------------------------------------------------------------------
@@ -251,7 +272,7 @@
     if (dragNode) {
       var w = screenToWorld(sx, sy);
       dragNode.fx = w[0]; dragNode.fy = w[1];
-      settled = false;
+      settled = false; tickCount = 0;
       tooltip.style.opacity = 0;
       return;
     }
@@ -286,7 +307,7 @@
   });
 
   window.addEventListener("mouseup", function () {
-    if (dragNode) { dragNode.fx = null; dragNode.fy = null; settled = false; }
+    if (dragNode) { dragNode.fx = null; dragNode.fy = null; settled = false; tickCount = 0; }
     dragNode = null;
     panning = false;
     canvas.classList.remove("dragging");
