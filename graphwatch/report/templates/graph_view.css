@@ -114,6 +114,20 @@ body { display: flex; flex-direction: column; }
   white-space: nowrap;
 }
 
+.controls {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 7px 20px; background: var(--surface); border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim);
+}
+.controls label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.controls input[type="range"] { width: 100px; accent-color: var(--accent); }
+.controls input[type="number"] {
+  width: 56px; background: var(--ground); border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--font-mono); font-size: 11px; padding: 2px 5px; border-radius: 4px;
+}
+.controls input[type="checkbox"] { accent-color: var(--accent); }
+.controls .v { color: var(--ink); min-width: 22px; display: inline-block; text-align: right; }
+
 /* ---------- corps : canvas + panneau ---------- */
 
 .body-row { flex: 1 1 auto; display: flex; min-height: 0; }

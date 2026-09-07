@@ -32,7 +32,12 @@
   // build working node/edge objects (world-space physics state)
   // ---------------------------------------------------------------------
   var nodeById = {};
-  var nodes = DATA.nodes.map(function (n, i) {
+  // allNodes/allEdges : l'état physique complet, jamais recréé -- un nœud
+  // filtré (masqué par les contrôles) garde sa position en mémoire pour
+  // réapparaître au bon endroit si on relève le filtre. nodes/edges (plus
+  // bas) sont la VUE active, celle que la physique et le rendu parcourent --
+  // recalculée par applyFilters() à chaque changement de contrôle.
+  var allNodes = DATA.nodes.map(function (n, i) {
     var angle = (i / DATA.nodes.length) * Math.PI * 2;
     var node = Object.assign({}, n, {
       x: Math.cos(angle) * 200 + (Math.random() - 0.5) * 40,
@@ -42,19 +47,22 @@
     nodeById[node.id] = node;
     return node;
   });
-  var edges = DATA.edges.map(function (e) {
+  var allEdges = DATA.edges.map(function (e) {
     return Object.assign({}, e, { s: nodeById[e.source], t: nodeById[e.target] });
   }).filter(function (e) { return e.s && e.t; });
 
-  var prMax = Math.max.apply(null, nodes.map(function (n) { return n.pagerank; }).concat([1e-9]));
-  var prMin = Math.min.apply(null, nodes.map(function (n) { return n.pagerank; }).concat([0]));
-  var wMax = Math.max.apply(null, edges.map(function (e) { return e.weight; }).concat([1]));
+  var prMax = Math.max.apply(null, allNodes.map(function (n) { return n.pagerank; }).concat([1e-9]));
+  var prMin = Math.min.apply(null, allNodes.map(function (n) { return n.pagerank; }).concat([0]));
+  var wMax = Math.max.apply(null, allEdges.map(function (e) { return e.weight; }).concat([1]));
 
   function radiusOf(n) {
     var t = prMax > prMin ? (n.pagerank - prMin) / (prMax - prMin) : 0.5;
     return 5 + t * 16;
   }
-  nodes.forEach(function (n) { n.r = radiusOf(n); });
+  allNodes.forEach(function (n) { n.r = radiusOf(n); });
+
+  var nodes = allNodes;
+  var edges = allEdges;
 
   // ---------------------------------------------------------------------
   // physics: simple force simulation (repulsion + springs + centering)
@@ -446,4 +454,57 @@
       renderPanel();
     }
   });
+
+  // ---------------------------------------------------------------------
+  // contrôles rustiques : poids min. affiché, max entités affichées, geler
+  // la physique -- filtrage côté client, aucun rechargement du serveur.
+  // ---------------------------------------------------------------------
+  var ctlMinWeight = document.getElementById("ctl-min-weight");
+  var ctlMinWeightV = document.getElementById("ctl-min-weight-v");
+  var ctlMaxNodes = document.getElementById("ctl-max-nodes");
+  var ctlFreeze = document.getElementById("ctl-freeze");
+
+  if (ctlMinWeight) {
+    ctlMinWeight.max = Math.max(1, Math.round(wMax));
+    ctlMinWeight.value = 1;
+  }
+
+  function applyFilters() {
+    var minWeight = ctlMinWeight ? parseFloat(ctlMinWeight.value) || 1 : 1;
+    var maxCount = ctlMaxNodes ? parseInt(ctlMaxNodes.value, 10) || allNodes.length : allNodes.length;
+
+    var byPagerank = allNodes.slice().sort(function (a, b) { return b.pagerank - a.pagerank; });
+    var keepIds = new Set(byPagerank.slice(0, maxCount).map(function (n) { return n.id; }));
+
+    nodes = allNodes.filter(function (n) { return keepIds.has(n.id); });
+    edges = allEdges.filter(function (e) {
+      return keepIds.has(e.s.id) && keepIds.has(e.t.id) && e.weight >= minWeight;
+    });
+
+    // un nœud qui sort du filtre ne doit pas rester "sélectionné" fantôme
+    if (selectedNode && !keepIds.has(selectedNode.id)) { selectedNode = null; renderPanel(); }
+    matchedIds = null;
+
+    if (!ctlFreeze || !ctlFreeze.checked) { settled = false; tickCount = 0; }
+  }
+
+  if (ctlMinWeight) {
+    ctlMinWeight.addEventListener("input", function () {
+      ctlMinWeightV.textContent = ctlMinWeight.value;
+      applyFilters();
+    });
+  }
+  if (ctlMaxNodes) ctlMaxNodes.addEventListener("input", applyFilters);
+
+  if (ctlFreeze) {
+    ctlFreeze.addEventListener("change", function () {
+      if (ctlFreeze.checked) {
+        nodes.forEach(function (n) { n.fx = n.x; n.fy = n.y; });
+        settled = true;
+      } else {
+        nodes.forEach(function (n) { n.fx = null; n.fy = null; });
+        settled = false; tickCount = 0;
+      }
+    });
+  }
 })();

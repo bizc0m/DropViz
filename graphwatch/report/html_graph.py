@@ -74,6 +74,12 @@ def generate_html_graph(
   <span id="search-count" class="search-count"></span>
 </div>
 
+<div class="controls">
+  <label>poids min. affiché <input type="range" id="ctl-min-weight" min="1" max="10" step="1" value="1"><span id="ctl-min-weight-v" class="v">1</span></label>
+  <label>max entités affichées <input type="number" id="ctl-max-nodes" min="10" max="{m['nNodes']}" value="{m['nNodes']}" step="10"> / {m['nNodes']}</label>
+  <label><input type="checkbox" id="ctl-freeze"> geler la physique (layout figé, plus d'animation)</label>
+</div>
+
 <div class="body-row">
   <div id="stage">
     <canvas id="graph-canvas"></canvas>
