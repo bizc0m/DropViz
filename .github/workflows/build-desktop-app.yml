@@ -1,0 +1,116 @@
+name: Build desktop apps
+
+# Un vrai bouton "Run workflow" apparaît dans l'onglet Actions du repo sur
+# GitHub -- clique dessus pour lancer un build à la demande, sans rien taper.
+# Se lance aussi automatiquement sur un tag "v*" (ex: v1.0.0), et attache les
+# 3 builds à une Release GitHub dans ce cas.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            entry: desktop_app.py
+            artifact: graph-watch-macos
+          - os: windows-latest
+            entry: desktop_app.py
+            artifact: graph-watch-windows
+          - os: ubuntu-latest
+            entry: desktop_app_linux.py
+            artifact: graph-watch-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-desktop.txt pyinstaller
+          python -m spacy download fr_core_news_sm
+
+      # Windows utilise ";" comme séparateur --add-data, Linux/macOS ":".
+      - name: Build (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: >
+          pyinstaller --noconfirm --onedir --name graph-watch
+          --add-data "graphwatch/report/templates:graphwatch/report/templates"
+          --add-data "graphwatch/webserver/templates:graphwatch/webserver/templates"
+          --add-data "config.example.yaml:."
+          --collect-all fr_core_news_sm
+          --collect-data spacy
+          --collect-data thinc
+          --collect-all rfc3987_syntax
+          ${{ matrix.entry }}
+
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        run: >
+          pyinstaller --noconfirm --onedir --name graph-watch
+          --add-data "graphwatch/report/templates;graphwatch/report/templates"
+          --add-data "graphwatch/webserver/templates;graphwatch/webserver/templates"
+          --add-data "config.example.yaml;."
+          --collect-all fr_core_news_sm
+          --collect-data spacy
+          --collect-data thinc
+          --collect-all rfc3987_syntax
+          ${{ matrix.entry }}
+
+      - name: Vérifie que ça démarre vraiment (pas juste "ça compile")
+        shell: bash
+        run: |
+          cd dist/graph-watch
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            EXE="./graph-watch.exe"
+          else
+            EXE="./graph-watch"
+          fi
+          "$EXE" > /tmp/smoke.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 60); do
+            [ -f config.yaml ] && break
+            sleep 1
+          done
+          if [ ! -f config.yaml ]; then
+            echo "config.yaml jamais créé -- l'app n'a pas démarré. Log :"
+            cat /tmp/smoke.log
+            exit 1
+          fi
+          echo "OK : config.yaml créé, l'app a bien démarré."
+          kill $PID 2>/dev/null || true
+
+      - name: Empaqueter
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            7z a -tzip "../${{ matrix.artifact }}.zip" graph-watch
+          else
+            tar -czf "../${{ matrix.artifact }}.tar.gz" graph-watch
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.tar.gz
+          if-no-files-found: ignore
+
+      - name: Attacher à la Release (uniquement sur un tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}.tar.gz
