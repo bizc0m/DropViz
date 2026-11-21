@@ -40,10 +40,13 @@
         links += '<a href="' + u + '" target="_blank">propagation ' + (i + 1) + ' ↗</a>';
       });
     }
-    item.className = "log-item ok";
+    var hasSkipped = data.skipped && data.skipped.length;
+    var hasSaved = data.saved && data.saved.length;
+    item.className = "log-item " + (hasSaved ? "ok" : "err");
     item.innerHTML =
-      '<div>✓ ' + escapeHtml(data.message || "traité") + '</div>' +
-      (data.saved && data.saved.length ? '<div class="files">' + data.saved.map(escapeHtml).join(", ") + '</div>' : "") +
+      '<div>' + (hasSaved ? "✓ " : "✗ ") + escapeHtml(data.message || "traité") + '</div>' +
+      (hasSaved ? '<div class="files">' + data.saved.map(escapeHtml).join(", ") + '</div>' : "") +
+      (hasSkipped ? '<div class="files" style="color:var(--danger,#d9776f)">ignoré(s) : ' + data.skipped.map(escapeHtml).join(", ") + '</div>' : "") +
       (links ? '<div style="margin-top:8px">' + links + '</div>' : "");
   }
 

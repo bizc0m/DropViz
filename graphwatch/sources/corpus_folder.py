@@ -9,10 +9,16 @@ Formats supportés par fichier :
                      soit une liste de tels objets (plusieurs documents par fichier)
   - .jsonl       -> une ligne = un objet {"title":..., "text":...}
   - .csv         -> doit contenir une colonne 'text' (et idéalement 'title')
+  - .xlsx        -> toutes les feuilles, cellule par cellule, texte concaténé
+                     (pas de formules évaluées : valeurs affichées telles quelles)
 
 Dépose simplement de nouveaux fichiers dans le dossier : au prochain cycle,
 seuls les fichiers jamais vus (par hash de contenu, géré par le DocumentStore)
 sont réellement traités.
+
+Tout fichier d'extension non listée ci-dessus est ignoré silencieusement au
+niveau du pipeline (pas d'erreur), d'où SUPPORTED_EXTS exposé plus bas : sert
+à avertir l'utilisateur (webui) qu'un fichier déposé ne sera jamais traité.
 """
 from __future__ import annotations
 
@@ -29,6 +35,8 @@ log = logging.getLogger(__name__)
 
 TEXT_EXTS = {".txt", ".md"}
 HTML_EXTS = {".html", ".htm"}
+SPREADSHEET_EXTS = {".xlsx"}
+SUPPORTED_EXTS = TEXT_EXTS | HTML_EXTS | SPREADSHEET_EXTS | {".pdf", ".json", ".jsonl", ".csv"}
 
 
 class CorpusFolderSource(Source):
@@ -113,8 +121,27 @@ class CorpusFolderSource(Source):
                     )
             return out
 
-        log.debug("extension ignorée: %s", f)
+        if ext in SPREADSHEET_EXTS:
+            text = self._extract_xlsx_text(f)
+            if not text.strip():
+                log.warning("%s : aucun texte extrait (xlsx vide ?)", f)
+            return [Document(source_name=self.name, origin=str(f), title=f.stem, text=text)]
+
+        log.warning("%s : extension '%s' non supportée, fichier ignoré (voir SUPPORTED_EXTS)", f, ext)
         return []
+
+    def _extract_xlsx_text(self, f: Path) -> str:
+        import pandas as pd
+
+        sheets = pd.read_excel(f, sheet_name=None, header=None, dtype=str)
+        parts = []
+        for sheet_name, df in sheets.items():
+            parts.append(f"## {sheet_name}")
+            for row in df.itertuples(index=False):
+                cells = [str(c).strip() for c in row if c is not None and str(c).strip().lower() != "nan"]
+                if cells:
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts)
 
     def _extract_pdf_text(self, f: Path) -> str:
         from pypdf import PdfReader

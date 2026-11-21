@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>HTML Viewer – style ACDSee</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: system-ui, -apple-system, sans-serif; background: #0f0f11; color: #e8e8e8; }
+
+    .dropzone {
+      padding: 14px 16px;
+      border-bottom: 1px solid #2a2a2e;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: #151518;
+      user-select: none;
+      min-height: 56px;
+    }
+    .dropzone.dragover {
+      background: #1b1b20;
+      outline: 2px dashed #666;
+    }
+    .dropzone input[type="file"] {
+      display: none;
+    }
+    .btn {
+      padding: 8px 14px;
+      background: #2a2a2f;
+      border: 1px solid #3a3a42;
+      color: #f0f0f0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background 0.15s ease;
+    }
+    .btn:hover { background: #36363d; }
+    .hint {
+      font-size: 12px;
+      color: #9aa0a6;
+      user-select: none;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      height: calc(100% - 56px);
+    }
+
+    .viewer {
+      position: relative;
+      height: 100%;
+      background: #000;
+    }
+    .viewer iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #fff;
+    }
+
+    .nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(20,20,24,0.8);
+      border: 1px solid #333;
+      color: #eee;
+      font-size: 22px;
+      padding: 8px 10px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background 0.15s ease, transform 0.05s ease;
+      user-select: none;
+    }
+    .nav:hover { background: rgba(40,40,48,0.95); }
+    .nav:active { transform: translateY(-50%) scale(0.97); }
+    .nav.prev { left: 12px; }
+    .nav.next { right: 12px; }
+    .nav:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .sidebar {
+      border-left: 1px solid #2a2a2e;
+      display: flex;
+      flex-direction: column;
+      background: #151518;
+    }
+    .sidebar-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid #2a2a2e;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e8e8e8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .notes {
+      flex: 1;
+      resize: none;
+      border: none;
+      background: #0f0f11;
+      color: #e8e8e8;
+      padding: 10px 12px;
+      font-family: ui-monospace, SFMono, Menlo, Consolas, monospace;
+      font-size: 12px;
+      outline: none;
+      line-height: 1.45;
+    }
+    .notes::placeholder {
+      color: #6b7280;
+    }
+
+    .strip {
+      height: 56px;
+      border-top: 1px solid #2a2a2e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      background: #151518;
+      overflow-x: auto;
+      user-select: none;
+    }
+    .thumb {
+      flex: 0 0 auto;
+      width: 140px;
+      height: 40px;
+      border: 1px solid #2a2a2e;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #c9cdd1;
+      cursor: pointer;
+      background: #1b1b20;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 6px;
+      transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+    }
+    .thumb:hover {
+      background: #222228;
+    }
+    .thumb.active {
+      border-color: #60a5fa;
+      background: #1f2530;
+      color: #fff;
+    }
+    .thumb.has-notes::after {
+      content: " ✎";
+      color: #93c5fd;
+    }
+  </style>
+</head>
+<body>
+  <div class="dropzone" id="dropzone">
+    <label class="btn">
+      Ajouter des HTML
+      <input type="file" id="fileInput" accept=".html,.htm" multiple />
+    </label>
+    <div class="hint">
+      ou glisse-dé¬Įpose des fichiers HTML ici
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="viewer">
+      <button class="nav prev" id="prevBtn" title="Pré¬©dent (←)">‹</button>
+      <iframe id="viewerFrame" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+      <button class="nav next" id="nextBtn" title="Suivant (→)">›</button>
+    </div>
+
+    <div class="sidebar">
+      <div class="sidebar-header" id="sidebarTitle">Aucun fichier</div>
+      <textarea class="notes" id="notesArea" placeholder="Notes pour ce fichier (sauvegardé¬©es dans le navigateur)…"></textarea>
+    </div>
+  </div>
+
+  <div class="strip" id="strip"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const dropzone = document.getElementById('dropzone');
+    const viewerFrame = document.getElementById('viewerFrame');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const strip = document.getElementById('strip');
+    const notesArea = document.getElementById('notesArea');
+    const sidebarTitle = document.getElementById('sidebarTitle');
+
+    let files = []; // { name, file, url, notes }
+    let currentIndex = -1;
+
+    // Empê¬©cher le comportement par défaut du drag & drop sur toute la page
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => e.preventDefault());
+
+    // Gestion du file input
+    fileInput.addEventListener('change', (e) => {
+      addFiles(Array.from(e.target.files));
+      fileInput.value = '';
+    });
+
+    // Drag & drop sur la dropzone
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('dragover');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('dragover');
+
+      const dropped = Array.from(e.dataTransfer.files).filter(
+        f => f.type === 'text/html' || f.name.endsWith('.html') || f.name.endsWith('.htm')
+      );
+
+      if (dropped.length === 0) {
+        // Feedback visuel rapide via le titre
+        const oldTitle = document.title;
+        document.title = "Aucun fichier HTML détecté¬©";
+        setTimeout(() => { document.title = oldTitle; }, 1200);
+        return;
+      }
+
+      addFiles(dropped);
+    });
+
+    function addFiles(newFiles) {
+      for (const f of newFiles) {
+        const url = URL.createObjectURL(f);
+        files.push({ name: f.name, file: f, url, notes: '' });
+      }
+      if (currentIndex === -1 && files.length > 0) {
+        currentIndex = 0;
+        show(currentIndex);
+      }
+      renderStrip();
+      updateNavButtons();
+    }
+
+    function show(index) {
+      if (index < 0 || index >= files.length) return;
+
+      // Sauvegarder les notes du fichier précédent
+      if (currentIndex >= 0 && currentIndex < files.length) {
+        files[currentIndex].notes = notesArea.value;
+        persistNotes();
+      }
+
+      currentIndex = index;
+      const item = files[currentIndex];
+      viewerFrame.src = item.url;
+      sidebarTitle.textContent = item.name;
+      sidebarTitle.title = item.name;
+      notesArea.value = item.notes || '';
+
+      renderStrip();
+      updateNavButtons();
+    }
+
+    function renderStrip() {
+      strip.innerHTML = '';
+      files.forEach((f, i) => {
+        const el = document.createElement('div');
+        el.className = 'thumb' + (i === currentIndex ? ' active' : '');
+        if (f.notes && f.notes.trim().length > 0) {
+          el.classList.add('has-notes');
+        }
+        el.textContent = f.name;
+        el.title = f.name;
+        el.addEventListener('click', () => show(i));
+        strip.appendChild(el);
+      });
+    }
+
+    function updateNavButtons() {
+      prevBtn.disabled = currentIndex <= 0;
+      nextBtn.disabled = currentIndex >= files.length - 1;
+    }
+
+    prevBtn.addEventListener('click', () => {
+      if (currentIndex > 0) show(currentIndex - 1);
+    });
+    nextBtn.addEventListener('click', () => {
+      if (currentIndex < files.length - 1) show(currentIndex + 1);
+    });
+
+    // Raccourcis clavier
+    window.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
+        // Ne pas intercepter quand on est en train d'crire dans les notes
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        if (currentIndex > 0) show(currentIndex - 1);
+      } else if (e.key === 'ArrowRight') {
+        if (currentIndex < files.length - 1) show(currentIndex + 1);
+      }
+    });
+
+    // Sauvegarde auto des notes
+    notesArea.addEventListener('input', () => {
+      if (currentIndex >= 0 && currentIndex < files.length) {
+        files[currentIndex].notes = notesArea.value;
+        persistNotes();
+      }
+    });
+
+    const STORAGE_KEY = 'htmlViewerNotesV1';
+
+    function persistNotes() {
+      const data = files.map(f => ({ name: f.name, notes: f.notes }));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch {}
+    }
+
+    // Restauration des notes au chargement
+    window.addEventListener('load', () => {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        const map = new Map(saved.map(s => [s.name, s.notes]));
+        files.forEach(f => {
+          if (map.has(f.name)) f.notes = map.get(f.name);
+        });
+        if (currentIndex >= 0) {
+          notesArea.value = files[currentIndex].notes || '';
+          renderStrip();
+        }
+      } catch {}
+    });
+  </script>
+</body>
+</html>

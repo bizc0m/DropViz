@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from graphwatch.config import AppConfig, SourceConfig, load_config
 from graphwatch.pipeline import CycleResult, run_cycle
 from graphwatch.propagation_pipeline import PropagationCycleResult
+from graphwatch.sources.corpus_folder import SUPPORTED_EXTS
 from graphwatch.webserver.url_fetch import FetchError, fetch_url_text
 
 log = logging.getLogger(__name__)
@@ -48,8 +49,11 @@ def _get_corpus_source(app_config: AppConfig, name: str) -> SourceConfig:
     raise HTTPException(404, f"source corpus_folder inconnue: {name}")
 
 
-def _result_payload(saved: list[str], result) -> dict:
+def _result_payload(saved: list[str], result, skipped: list[str] | None = None) -> dict:
     payload = {"ok": True, "saved": saved, "message": f"{len(saved)} fichier(s) ajouté(s)"}
+    if skipped:
+        payload["skipped"] = skipped
+        payload["message"] += f" — {len(skipped)} ignoré(s) (format non supporté : {', '.join(sorted(SUPPORTED_EXTS))})"
     if isinstance(result, CycleResult):
         payload["notebook_url"] = f"/reports/{result.notebook_path.name}"
         payload["graph_url"] = f"/reports/{result.html_graph_path.name}"
@@ -147,21 +151,30 @@ def create_app(config_path: str | Path) -> FastAPI:
         folder.mkdir(parents=True, exist_ok=True)
 
         saved = []
+        skipped = []
         for f in files:
             data = await f.read()
             if len(data) > 20_000_000:
                 log.warning("fichier %s ignoré (> 20 Mo)", f.filename)
+                skipped.append(f.filename or "?")
                 continue
-            dest = _unique_dest(folder, _safe_filename(f.filename or "upload.txt"))
+            name = _safe_filename(f.filename or "upload.txt")
+            if Path(name).suffix.lower() not in SUPPORTED_EXTS:
+                log.warning("fichier %s ignoré (format non supporté)", name)
+                skipped.append(name)
+                continue
+            dest = _unique_dest(folder, name)
             dest.write_bytes(data)
             saved.append(dest.name)
 
+        if not saved and not skipped:
+            raise HTTPException(400, "aucun fichier reçu")
         if not saved:
-            raise HTTPException(400, "aucun fichier valide reçu")
+            return JSONResponse(_result_payload(saved, None, skipped), status_code=200)
 
         result = run_cycle(app_config, source_cfg, force_report=True)
-        log.info("[webui] %d fichier(s) ajoutés à '%s'", len(saved), source_cfg.name)
-        return JSONResponse(_result_payload(saved, result))
+        log.info("[webui] %d fichier(s) ajoutés à '%s', %d ignoré(s)", len(saved), source_cfg.name, len(skipped))
+        return JSONResponse(_result_payload(saved, result, skipped))
 
     @app.post("/api/fetch-url")
     async def fetch_url_endpoint(payload: dict):
